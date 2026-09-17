@@ -44,17 +44,20 @@ pip install mediapipe opencv-python numpy scikit-learn pyttsx3 joblib fastapi uv
 
 ### 2. Launch the Application
 
-#### Option A: Modern Glassmorphic Web Dashboard (Recommended)
+#### Unified 1-Click Launcher (Recommended)
+On Windows, double-click **`start.bat`** or run:
 ```bash
-python web_app.py
+python start.py
 ```
-Open **`http://localhost:8000`** in your browser. Features live AR viewport, two-way speech bridge, tone selector, and transcript export.
+This presents an interactive launcher menu to immediately run the **Web Dashboard**, the **OpenCV Desktop AR HUD**, the **Test Suite**, or the **Model Generator**.
 
-#### Option B: OpenCV Desktop AR HUD
+You can also launch specific targets directly:
 ```bash
-python predict_sequence.py
+python start.py --web       # Starts Web Dashboard & opens browser
+python start.py --desktop   # Starts OpenCV AR HUD window
+python start.py --test      # Runs full verification suite
 ```
-Launches the OpenCV desktop interface with full AR glasses HUD (`G` key), real-time gesture stabilization, and TTS output. Baseline models are auto-provisioned if not already present.
+
 
 ### 3. (Optional) Gemini AI Expansion Configuration
 Set your Gemini API key in your environment to enable AI sentence expansion:

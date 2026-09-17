@@ -23,6 +23,7 @@ NORMALISE = {
     "CANNOT": "CAN'T",
     "WILL NOT": "WON'T",
     "WANT TO": "WANT TO",
+    "NEED TO": "NEED TO",
 }
 
 # Very small subject–verb agreement patches
@@ -34,19 +35,20 @@ AGREEMENT = {
     "HE AM": "HE IS",
     "SHE AM": "SHE IS",
     "IT AM": "IT IS",
+    "I ARE": "I AM",
 }
 
 # Words that should always be capitalised
-ALWAYS_CAPS = {"I"}
+ALWAYS_CAPS = {"I", "ASL", "OK", "TV"}
 
 # Sentence-terminal punctuation triggers
 SENTENCE_ENDERS = {"PLEASE", "NOW", "THANKS", "THANK", "YES", "NO", "BYE",
-                   "STOP", "WAIT", "SORRY", "OKAY", "OK"}
+                   "STOP", "WAIT", "SORRY", "OKAY", "OK", "TODAY", "SOON"}
 
 # Filler / noise words to strip
-NOISE_WORDS = {"UM", "UH", "HMM", "ERR"}
+NOISE_WORDS = {"UM", "UH", "HMM", "ERR", "LIKE"}
 
-# Word reordering rules for common phrases
+# Word reordering & phrase expansion rules for ASL topic-comment patterns
 WORD_REORDER = {
     ("HELP", "PLEASE"): ("PLEASE", "HELP", "ME"),
     ("PLEASE", "HELP"): ("PLEASE", "HELP", "ME"),
@@ -60,6 +62,24 @@ WORD_REORDER = {
     ("YOU", "THANK"): ("THANK", "YOU"),
     ("I", "HUNGRY"): ("I", "AM", "HUNGRY"),
     ("HUNGRY", "I"): ("I", "AM", "HUNGRY"),
+    ("NEED", "WATER"): ("I", "NEED", "WATER"),
+    ("WANT", "WATER"): ("I", "WANT", "WATER"),
+    ("NEED", "FOOD"): ("I", "NEED", "FOOD"),
+    ("WANT", "FOOD"): ("I", "WANT", "FOOD"),
+    ("NEED", "DOCTOR"): ("I", "NEED", "A", "DOCTOR"),
+    ("WANT", "DOCTOR"): ("PLEASE", "CALL", "A", "DOCTOR"),
+    ("CALL", "DOCTOR"): ("PLEASE", "CALL", "A", "DOCTOR"),
+    ("CALL", "POLICE"): ("PLEASE", "CALL", "THE", "POLICE"),
+    ("CALL", "HELP"): ("PLEASE", "CALL", "FOR", "HELP"),
+    ("FEEL", "PAIN"): ("I", "FEEL", "PAIN"),
+    ("FEEL", "SICK"): ("I", "FEEL", "SICK"),
+    ("FEEL", "TIRED"): ("I", "FEEL", "TIRED"),
+    ("GO", "HOME"): ("I", "WANT", "TO", "GO", "HOME"),
+    ("COME", "HERE"): ("PLEASE", "COME", "HERE"),
+    ("STOP", "PLEASE"): ("PLEASE", "STOP"),
+    ("WHERE", "BATHROOM"): ("WHERE", "IS", "THE", "BATHROOM"),
+    ("WHERE", "RESTROOM"): ("WHERE", "IS", "THE", "RESTROOM"),
+    ("WHERE", "DOCTOR"): ("WHERE", "IS", "THE", "DOCTOR"),
 }
 
 

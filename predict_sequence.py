@@ -33,13 +33,13 @@ import joblib
 import sys
 import os
 import threading
+import queue
 from collections import deque
 from typing import Optional, List, Deque
 from datetime import datetime
 
 import cv2
 import numpy as np
-import mediapipe as mp
 
 # ---------------------------------------------------------------------------
 # Optional imports — graceful fallback
@@ -70,7 +70,7 @@ except ImportError:
     _PICKLE_AVAILABLE = False
 
 # Local modules
-from feature_extraction import extract_features
+from feature_extraction import extract_features, extract_landmarks_from_results
 from letter_buffer import LetterBuffer
 from grammar_corrector import GrammarCorrector
 from prediction_memory import PredictionMemory
@@ -326,32 +326,48 @@ def extract_landmarks(results, frame_rgb):
 # ---------------------------------------------------------------------------
 # TTS
 # ---------------------------------------------------------------------------
-_tts_engine = None
+_tts_queue: queue.Queue = queue.Queue()
+_tts_thread = None
 
-def _init_tts():
-    global _tts_engine
+def _tts_worker():
     if not _TTS_AVAILABLE:
         return
     try:
-        _tts_engine = pyttsx3.init()
-        _tts_engine.setProperty("rate", 150)
-        _tts_engine.setProperty("volume", 0.9)
+        engine = pyttsx3.init()
+        engine.setProperty("rate", 150)
+        engine.setProperty("volume", 0.9)
     except Exception as e:
-        print(f"[WARN] TTS init failed: {e}")
-        _tts_engine = None
+        print(f"[WARN] TTS init failed in worker: {e}")
+        return
+
+    while True:
+        text = _tts_queue.get()
+        if text is None:
+            break
+        try:
+            engine.say(text)
+            engine.runAndWait()
+        except Exception as e:
+            print(f"[WARN] TTS speech error: {e}")
+        finally:
+            _tts_queue.task_done()
+
+
+def _init_tts():
+    global _tts_thread
+    if not _TTS_AVAILABLE:
+        return
+    if _tts_thread is None or not _tts_thread.is_alive():
+        _tts_thread = threading.Thread(target=_tts_worker, daemon=True)
+        _tts_thread.start()
 
 
 def speak(text: str):
-    """Speak text in a background thread (non-blocking)."""
-    if _tts_engine is None:
+    """Speak text using the background worker queue (thread-safe, non-blocking)."""
+    if not _TTS_AVAILABLE or not text or not text.strip():
         return
-    def _run():
-        try:
-            _tts_engine.say(text)
-            _tts_engine.runAndWait()
-        except Exception:
-            pass
-    threading.Thread(target=_run, daemon=True).start()
+    _init_tts()
+    _tts_queue.put(text.strip())
 
 def play_beep(frequency: int = 800, duration: int = 200):
     """Audio feedback disabled."""
@@ -465,8 +481,9 @@ def main(model_path: Optional[str] = None):
             if _MP_AVAILABLE and hands_proc:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = hands_proc.process(rgb)
-                lm = extract_features(rgb, include_face=(mode == "LETTER"))
-                hands_detected = lm is not None
+                lm, hands_detected = extract_landmarks_from_results(
+                    results, include_face=(mode == "LETTER")
+                )
 
                 # Draw skeleton
                 if results and results.multi_hand_landmarks:
@@ -474,65 +491,61 @@ def main(model_path: Optional[str] = None):
                         mp_draw.draw_landmarks(
                             frame, hl,
                             mp_hands.HAND_CONNECTIONS,
-                            mp_draw.DrawingSpec(color=(0,200,150),
+                            mp_draw.DrawingSpec(color=(0, 200, 150),
                                                 thickness=2, circle_radius=3),
-                            mp_draw.DrawingSpec(color=(0,150,200),
+                            mp_draw.DrawingSpec(color=(0, 150, 200),
                                                 thickness=2))
             else:
                 lm = None
                 hands_detected = False
 
-            if lm is not None:
+            if hands_detected and lm is not None:
                 landmark_window.append(lm)
+            else:
+                cur_status = "NO HANDS"
+                cur_pred = ""
+                cur_conf = 0.0
+                last_added = ""
 
-            # Prediction when window full
+            # Prediction when window full and hands are detected
             if len(landmark_window) == WINDOW_SIZE and hands_detected:
-                window_arr = np.array(landmark_window)   # (40, 84) - hands only
+                window_arr = np.array(landmark_window)
                 raw_label, raw_conf = predictor.predict(window_arr)
                 memory.push(raw_label, raw_conf)
 
                 stable_label, eff_conf, status = memory.get_stable_prediction()
-                cur_pred   = stable_label or raw_label
-                cur_conf   = round(eff_conf, 2)
+                cur_pred = stable_label or raw_label
+                cur_conf = round(eff_conf, 2)
                 cur_status = status
 
                 if not predictor._valid_model:
                     cur_pred = "---"
                     cur_conf = 0.0
                     cur_status = "NO MODEL"
-                
-            # auto-accept logic for WORD mode
-                
+
+                # auto-accept logic for WORD mode
                 if mode == "WORD" and cur_status == "READY" and cur_conf >= 0.85:
-                    
-                    if time.time() - last_time > GLOBAL_COOLDOWN:# 1 second cooldown
+                    if time.time() - last_time > GLOBAL_COOLDOWN:
                         last_time = time.time()
-                    
                         if cur_pred != last_added:
                             accepted = sentence_b.add(cur_pred)
                             if accepted:
                                 memory.confirm(cur_pred)
-                                print(f"[WORD] Added '{cur_pred}' → "
-                                    f"{sentence_b.display}")
+                                print(f"[WORD] Added '{cur_pred}' → {sentence_b.display}")
                                 last_added = cur_pred
-                
-            # auto-add logic for LETTER mode
-            elif mode == "LETTER" and cur_status == "READY" and cur_conf >= USER_ACCEPTANCE_CONFIDENCE:
-                if time.time() - last_time > GLOBAL_COOLDOWN:
-                    last_time = time.time()
-                    accepted = letter_buf.add_letter(cur_pred)
-                    if accepted:
-                        print(f"[LETTER-AUTO] Added '{cur_pred}' → {letter_buf.display_string}")
-                    else:
-                        print(f"[LETTER-REJECTED] '{cur_pred}' (duplicate or buffer full)")
-                        last_added = cur_pred
-                
-            elif not hands_detected:
-                cur_status = "NO HANDS"
-                cur_pred   = ""
-                cur_conf   = 0.0
-                last_added = ""
-            else:
+
+                # auto-add logic for LETTER mode
+                elif mode == "LETTER" and cur_status == "READY" and cur_conf >= USER_ACCEPTANCE_CONFIDENCE:
+                    if time.time() - last_time > GLOBAL_COOLDOWN:
+                        last_time = time.time()
+                        accepted = letter_buf.add_letter(cur_pred)
+                        if accepted:
+                            print(f"[LETTER-AUTO] Added '{cur_pred}' → {letter_buf.display_string}")
+                        else:
+                            print(f"[LETTER-REJECTED] '{cur_pred}' (duplicate or buffer full)")
+                            last_added = cur_pred
+
+            elif hands_detected:
                 cur_status = "STABILIZING"
 
         # ── Key handling ───────────────────────────────────────────────
@@ -620,13 +633,13 @@ def main(model_path: Optional[str] = None):
                 mode = "LETTER"
                 predictor.load_model("letter")
                 letter_buf.reset()
-                sequence_frames.clear()  # Clear buffer for dimension change
+                landmark_window.clear()  # Clear buffer for dimension change
                 print("[MODE] Switched to LETTER mode")
             else:
                 mode = "WORD"
                 predictor.load_model("word")
                 letter_buf.reset()
-                sequence_frames.clear()  # Clear buffer for dimension change
+                landmark_window.clear()  # Clear buffer for dimension change
                 print("[MODE] Switched to WORD mode")
 
         elif key == ord('s'):
@@ -682,10 +695,13 @@ def main(model_path: Optional[str] = None):
 
         elif key == 13:  # ENTER
             if mode == "LETTER" and not letter_buf.is_empty:
-                # Flush remaining letters as a word first
+                # Flush remaining letters as words first
                 flushed = letter_buf.flush_on_space()
                 if flushed:
-                    sentence_b.add(flushed)
+                    for w in flushed:
+                        if w.strip():
+                            sentence_b.add(w.strip())
+                            memory.confirm(w.strip())
 
             raw_words = sentence_b.words
             if raw_words:

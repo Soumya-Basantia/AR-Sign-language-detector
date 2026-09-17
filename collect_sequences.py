@@ -16,7 +16,16 @@ import numpy as np
 import os
 import time
 import json
-from feature_extraction import extract_features
+import mediapipe as mp
+from feature_extraction import extract_features, extract_landmarks_from_results
+
+mp_hands = mp.solutions.hands
+mp_draw = mp.solutions.drawing_utils
+hands_detector = mp_hands.Hands(
+    max_num_hands=2,
+    min_detection_confidence=0.6,
+    min_tracking_confidence=0.5
+)
 
 # ─────────────────────────────────────────────
 # Configuration
@@ -113,17 +122,17 @@ def collect_for_word(word, cap):
                 break
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            feats = extract_features(rgb, include_face=False)
+            hand_result = hands_detector.process(rgb)
+            feats, detected = extract_landmarks_from_results(hand_result, include_face=False)
             
             # Validate frame data
-            if np.any(np.isnan(feats)) or np.all(feats == 0):
-                print(f"[WARN] Invalid frame detected (NaN or all-zero), skipping frame {frame_idx}")
+            if not detected or np.any(np.isnan(feats)) or np.all(feats == 0):
+                print(f"[WARN] No hands or invalid frame detected, skipping frame {frame_idx}")
                 continue
             
             sequence_frames.append(feats)
 
             # Draw hand landmarks for visualization
-            hand_result = hands_detector.process(rgb)
             if hand_result.multi_hand_landmarks:
                 for hand_lm in hand_result.multi_hand_landmarks:
                     mp_draw.draw_landmarks(

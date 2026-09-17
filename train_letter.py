@@ -15,7 +15,6 @@ Usage:
 
 import os
 import argparse
-from xml.parsers.expat import model
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -23,7 +22,6 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.model_selection import train_test_split
 import joblib
 import json
 

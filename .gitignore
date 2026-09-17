@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and checkpoints
+model/*.pkl
+model/*.h5
+model/*.keras
+!model/.gitkeep
+
+# Data directories
+data/
+data_letters/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp

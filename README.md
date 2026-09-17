@@ -1,152 +1,140 @@
 # Real-Time Sign Language Communication System
-### AR Glasses HUD · Gesture → Sentence · Voice Output
+### AR Glasses HUD · Gesture → Sentence · Voice Output · AI Speech Bridge
+
+---
+
+## Overview
+
+A high-performance assistive communication platform that translates American Sign Language (ASL) gestures and fingerspelling into natural, fluent English speech. Features an interactive Augmented Reality (AR) glasses HUD simulation with contextual suggestions, phrase autocomplete, and real-time voice synthesis.
+
+---
+
+## Key Features
+
+- **Dual Interaction Modes**:
+  - **WORD Mode**: Whole-word gesture recognition using sliding-window temporal classification.
+  - **LETTER Mode**: Real-time fingerspelling accumulation with Levenshtein-distance fuzzy spell correction and pause auto-flush.
+- **Augmented Reality HUD**:
+  - **Normal UI**: Structured control dashboard with confidence meters, live buffers, and context suggestions.
+  - **AR Glasses Mode**: Minimal floating HUD, holographic subtitle animation, subtle vignette, and dynamic scanlines.
+- **Optimized Computer Vision Pipeline**:
+  - Direct single-pass MediaPipe processing (eliminating redundant inferences for high FPS).
+  - Wrist-relative landmark normalization ($x, y$ coordinates invariant to hand screen position and distance).
+  - ROI-blended UI overlays and precomputed radial gradient masks.
+- **Intelligent Grammar & NLP**:
+  - Automatic sentence casing, noise word filtering, and duplicate removal.
+  - Topic-comment sign reordering and natural phrase expansion (e.g. `["NEED", "WATER"]` → `"I need water."`).
+  - Context-aware bigram next-word prediction and phrase templates.
+- **Voice Output**:
+  - Thread-safe, non-blocking TTS engine queue for smooth Windows speech output on finalization.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install mediapipe opencv-python numpy pyttsx3
+# 1. Install dependencies
+pip install mediapipe opencv-python numpy scikit-learn pyttsx3 joblib
 
-# Run with your trained model
-python predict_sequence.py --model models/your_model.pkl
-
-# Run in DEMO mode (no model needed — all UI features work)
+# 2. Run system (launches in DEMO mode if no weights present)
 python predict_sequence.py
+
+# Or load a specific model
+python predict_sequence.py --model model/model_mlp.pkl
 ```
 
 ---
 
-## Key Bindings
+## Controls & Key Bindings
 
-| Key     | Action                                          |
-|---------|-------------------------------------------------|
-| `SPACE` | Accept current prediction (word or letter)      |
-| `D`     | Delete last word / last letter                  |
-| `R`     | Full system reset                               |
-| `M`     | Toggle WORD ↔ LETTER mode                      |
-| `ENTER` | Finalize sentence → grammar correct → speak     |
-| `G`     | Toggle AR Glasses ↔ Normal UI                  |
-| `Q`     | Quit                                            |
+| Key | Action |
+|---|---|
+| `SPACE` | Accept current prediction into sentence / flush letter buffer |
+| `S` | Insert space between words (LETTER mode) |
+| `D` | Delete last word or letter |
+| `U` | Undo last action |
+| `1`, `2`, `3` | Select contextual word suggestion |
+| `M` | Toggle **WORD** ↔ **LETTER** mode |
+| `ENTER` | Finalize sentence → grammar correct → synthesize speech |
+| `G` | Toggle **AR Glasses HUD** ↔ **Normal Dashboard** |
+| `R` | Full system reset |
+| `Q` | Quit application |
 
 ---
 
 ## Architecture
 
 ```
-Camera
-  └─► MediaPipe Hands (21 keypoints × 3D = 63 features)
+Webcam Feed (OpenCV)
+  └─► MediaPipe Hands (21 keypoints × 2 hands = 84 normalized features)
         └─► Sliding Window Buffer (40 frames)
-              └─► Predictor (MLP / RF / LSTM wrapper)
+              └─► Classification Engine (Scikit-Learn MLP / LSTM)
                     └─► PredictionMemory
-                    │     ├── Sliding window majority vote (7 frames)
-                    │     ├── Stability gate (5 stable frames)
-                    │     ├── Context boost (bigram table)
-                    │     └── Confidence threshold (0.70)
+                    │     ├── Majority voting over temporal window (7 frames)
+                    │     ├── Stability gate (5 stable frames before ready)
+                    │     ├── Context boost (bigram transition table)
+                    │     └── Confidence threshold gating (0.85)
                     │
-                    ├─► [WORD mode] SentenceBuilder
-                    │     ├── Rolling buffer (10 words)
-                    │     ├── Duplicate cooldown guard
-                    │     └── GrammarCorrector (rule-based)
+                    ├─► [WORD Mode] SentenceBuilder
+                    │     ├── Rolling word buffer with duplicate cooldown
+                    │     └── Dynamic phrase expansion
                     │
-                    └─► [LETTER mode] LetterBuffer
-                          ├── Same-letter cooldown guard
-                          ├── Auto-flush on pause (1.5 s)
-                          └── AutoCorrect (Levenshtein + lookup)
-
-Output ──► ARDisplay
-             ├── Normal UI (structured dark panels)
-             └── AR Glasses (floating HUD, vignette, scanlines)
-                   └─► pyttsx3 voice output (on ENTER)
+                    └─► [LETTER Mode] LetterBuffer
+                          ├── Duplicate suppression & pause-flush (1.5s)
+                          └── Levenshtein fuzzy spell correction
+                                └─► GrammarCorrector
+                                      ├── Rule-based reordering (ASL → English)
+                                      ├── Subject-verb agreement & contractions
+                                      └── Sentence-case & terminal punctuation
+                                            └─► ARDisplay
+                                                  ├── Normal Dashboard or AR Floating HUD
+                                                  └─► Non-blocking Speech Synthesis (pyttsx3)
 ```
 
 ---
 
-## Module Reference
+## Dataset Collection & Model Training
 
-### `predict_sequence.py`
-Main entry point. Orchestrates all components.
-- `Predictor` — Model wrapper with DEMO fallback
-- `SentenceBuilder` — Rolling word buffer
-- Frame-skip optimization (process every 2nd frame)
+### 1. Collect Custom Sequences
+```bash
+# Collect gesture sequences for words
+python collect_sequences.py
 
-### `prediction_memory.py` — `PredictionMemory`
-- `push(label, conf)` — Feed raw frame prediction
-- `get_stable_prediction()` → `(label, conf, status)`
-  - status: `"READY"` / `"STABILIZING"` / `"LOW_CONF"` / `"COOLDOWN"`
-- `confirm(label)` — Lock in an accepted word
-- `context_suggestions` — Next-word hints from bigram table
-
-### `letter_buffer.py` — `LetterBuffer`
-- `add_letter(letter)` — Add signed letter (duplicate guard)
-- `flush_on_space()` → corrected word string
-- `check_pause_flush()` — Auto-flush after silence
-- `display_string` → `"H E L P"` for HUD
-
-### `grammar_corrector.py` — `GrammarCorrector`
-- `correct(words: List[str])` → polished sentence string
-- Pipeline: noise strip → dedup → agreement fix → capitalise → punctuate
-
-### `ar_display.py` — `ARDisplay`
-- `render(frame, state_dict)` → annotated frame
-- `toggle_mode()` — Normal ↔ AR Glasses
-- AR mode: vignette, scanlines, corner brackets, floating text, pulse ring
-
----
-
-## Model Integration
-
-Your model `.pkl` file should be one of:
-
-**Option A — Raw sklearn model**
-```python
-import pickle
-with open("models/model.pkl", "wb") as f:
-    pickle.dump(trained_model, f)
-# model must have .predict_proba(X) or .predict(X)
+# Collect fingerspelling letters
+python collect_letters.py
 ```
 
-**Option B — Dict with classes**
-```python
-with open("models/model.pkl", "wb") as f:
-    pickle.dump({"model": trained_model, "classes": class_names}, f)
+### 2. Train Models
+```bash
+# Train word model (MLP default or LSTM)
+python train_model.py
+python train_model.py --model lstm
+
+# Train letter model
+python train_letter.py
 ```
 
-Input shape: `(1, WINDOW_SIZE × 63)` = `(1, 2520)`
-
----
-
-## Confidence Color Coding
-
-| Color  | Threshold       | Meaning                      |
-|--------|-----------------|------------------------------|
-| 🟢 Green  | ≥ 80%       | High confidence — safe to accept |
-| 🟠 Orange | 60% – 79%   | Medium — stabilizing         |
-| 🔴 Red    | < 60%       | Low — prediction unreliable  |
-
----
-
-## Adding Custom Words / Corrections
-
-Edit `letter_buffer.py`:
-```python
-CORRECTION_MAP = {
-    "YORU": "YOUR",
-    "TOMOROW": "TOMORROW",
-    # ... add your own
-}
-
-COMMON_WORDS = [
-    "YOUR", "TOMORROW", ...  # fuzzy match dictionary
-]
+### 3. Dynamic Vocabulary Management
+```bash
+python dynamic_trainer.py
 ```
 
 ---
 
-## Future Extensions
+## Automated Verification
 
-- **Smart glasses**: Replace `cv2.imshow` with WebSocket stream to Android/iOS
-- **Custom LSTM**: Drop any `(WINDOW_SIZE, 63)` → softmax model into `Predictor`
-- **Larger dictionary**: Swap `COMMON_WORDS` for a full word list file
-- **Per-user calibration**: Record normalization offsets per hand size
+Run the built-in unit test suite to verify grammar correction, spelling buffers, and prediction memory:
+
+```bash
+python test_system.py
+```
+
+---
+
+## Confidence Indicators
+
+| Color | Threshold | Meaning |
+|---|---|---|
+| 🟢 Green | $\ge 80\%$ | High confidence — safe to accept |
+| 🟠 Orange | $60\% - 79\%$ | Medium confidence — stabilizing |
+| 🔴 Red | $< 60\%$ | Low confidence / No hands detected |

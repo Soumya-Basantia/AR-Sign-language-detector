@@ -226,7 +226,16 @@ class Predictor:
                 raise ValueError(f"Unknown model type: {model}")
             
             if not os.path.exists(model_path):
+                try:
+                    from generate_baseline_model import ensure_baseline_models
+                    print(f"[INFO] {model_path} not found. Auto-generating baseline model...")
+                    ensure_baseline_models()
+                except Exception as gen_err:
+                    print(f"[WARN] Auto-generation of baseline model failed: {gen_err}")
+
+            if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model not found: {model_path}")
+
             
             self._model = joblib.load(model_path)
             self._classes = joblib.load(encoder_path).classes_

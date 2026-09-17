@@ -14,6 +14,15 @@ A high-performance assistive communication platform that translates American Sig
 - **Dual Interaction Modes**:
   - **WORD Mode**: Whole-word gesture recognition using sliding-window temporal classification.
   - **LETTER Mode**: Real-time fingerspelling accumulation with Levenshtein-distance fuzzy spell correction and pause auto-flush.
+- **Glassmorphic Web Dashboard & Two-Way Bridge**:
+  - Full-featured browser UI (`http://localhost:8000`) with holographic AR HUD, real-time camera tracking, and interactive controls.
+  - **Bidirectional Communication**: Hearing partner speaks via microphone (Web Speech API) and their words appear as real-time holographic subtitles on the user's HUD.
+  - **Full Transcript Studio**: Multi-turn dialogue history with one-click JSON or TXT export.
+- **Gemini AI Sentence Expander**:
+  - Transforms raw sign sequences into natural, contextual spoken English with tone control (**Casual**, **Polite**, **Emergency**).
+  - Graceful rule-based NLP fallback when operating offline.
+- **Pre-Trained Baseline Models**:
+  - Auto-generated 16-word gesture model and 26-letter fingerspelling model ready to use immediately upon launch without manual dataset collection.
 - **Augmented Reality HUD**:
   - **Normal UI**: Structured control dashboard with confidence meters, live buffers, and context suggestions.
   - **AR Glasses Mode**: Minimal floating HUD, holographic subtitle animation, subtle vignette, and dynamic scanlines.
@@ -21,10 +30,6 @@ A high-performance assistive communication platform that translates American Sig
   - Direct single-pass MediaPipe processing (eliminating redundant inferences for high FPS).
   - Wrist-relative landmark normalization ($x, y$ coordinates invariant to hand screen position and distance).
   - ROI-blended UI overlays and precomputed radial gradient masks.
-- **Intelligent Grammar & NLP**:
-  - Automatic sentence casing, noise word filtering, and duplicate removal.
-  - Topic-comment sign reordering and natural phrase expansion (e.g. `["NEED", "WATER"]` → `"I need water."`).
-  - Context-aware bigram next-word prediction and phrase templates.
 - **Voice Output**:
   - Thread-safe, non-blocking TTS engine queue for smooth Windows speech output on finalization.
 
@@ -32,16 +37,32 @@ A high-performance assistive communication platform that translates American Sig
 
 ## Quick Start
 
+### 1. Install Dependencies
 ```bash
-# 1. Install dependencies
-pip install mediapipe opencv-python numpy scikit-learn pyttsx3 joblib
-
-# 2. Run system (launches in DEMO mode if no weights present)
-python predict_sequence.py
-
-# Or load a specific model
-python predict_sequence.py --model model/model_mlp.pkl
+pip install mediapipe opencv-python numpy scikit-learn pyttsx3 joblib fastapi uvicorn requests
 ```
+
+### 2. Launch the Application
+
+#### Option A: Modern Glassmorphic Web Dashboard (Recommended)
+```bash
+python web_app.py
+```
+Open **`http://localhost:8000`** in your browser. Features live AR viewport, two-way speech bridge, tone selector, and transcript export.
+
+#### Option B: OpenCV Desktop AR HUD
+```bash
+python predict_sequence.py
+```
+Launches the OpenCV desktop interface with full AR glasses HUD (`G` key), real-time gesture stabilization, and TTS output. Baseline models are auto-provisioned if not already present.
+
+### 3. (Optional) Gemini AI Expansion Configuration
+Set your Gemini API key in your environment to enable AI sentence expansion:
+```powershell
+$env:GEMINI_API_KEY="your_api_key_here"
+```
+*(If no API key is provided, the system automatically uses the built-in rule-based grammar engine without errors).*
+
 
 ---
 

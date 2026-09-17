@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Sign Language Communicator — AI Gesture & Speech Platform</title>
+  <meta name="description" content="Real-time AR sign language recognition platform with holographic HUD, Gemini AI sentence expansion, and two-way speech bridge.">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="brand-container">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+          <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
+          <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">AURA AR</h1>
+      </div>
+      <span class="brand-badge">Sign Speech Bridge</span>
+    </div>
+
+    <div class="header-status">
+      <div class="status-pill" id="model-status-pill">
+        <span class="status-dot"></span>
+        <span id="model-status-text">Models Ready</span>
+      </div>
+      <div class="status-pill" id="fps-pill">
+        <span id="fps-text" class="mono">FPS: --</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Layout -->
+  <main class="main-layout">
+    
+    <!-- Left Column: AR Viewport & Controls -->
+    <div class="hud-stage-column">
+      <div class="hud-card">
+        
+        <!-- Video Viewport & Overlays -->
+        <div class="hud-viewport-wrapper" id="viewport-wrapper">
+          <video id="webcam-video" autoplay playsinline muted></video>
+          <canvas id="hud-canvas"></canvas>
+
+          <!-- Holographic Vignette & Scanlines -->
+          <div class="ar-overlay-layer" id="ar-vignette-layer">
+            <div class="ar-scanlines"></div>
+          </div>
+
+          <!-- Holographic Floating HUD -->
+          <div class="hud-hud-elements" id="hud-overlay-elements">
+            <div class="hud-top-bar">
+              <div class="hud-mode-pill" id="hud-mode-display">◈ WORD MODE</div>
+              <div class="hud-pred-badge" id="hud-pred-box">
+                <span class="pred-label" id="hud-pred-label">READY</span>
+                <span class="pred-conf" id="hud-pred-conf">92% MATCH</span>
+              </div>
+            </div>
+
+            <!-- Partner Holographic Subtitle -->
+            <div class="hud-incoming-partner-box" id="hud-partner-box">
+              <div class="partner-tag">Hearing Partner</div>
+              <div id="hud-partner-text" style="color: #fff; font-weight: 500;">...</div>
+            </div>
+
+            <!-- Main Signer Subtitle -->
+            <div class="hud-subtitle-box">
+              <div class="hud-floating-text" id="hud-sentence-display">Waiting for gestures...</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="hud-controls-bar">
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-camera-toggle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              Start Camera
+            </button>
+            <button class="btn" id="btn-mode-toggle">Mode: WORD</button>
+            <button class="btn" id="btn-ar-toggle">AR HUD: ON</button>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn" id="btn-accept">Accept (Space)</button>
+            <button class="btn btn-accent" id="btn-finalize">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+              Finalize & Speak
+            </button>
+            <button class="btn btn-danger" id="btn-reset">Reset</button>
+          </div>
+        </div>
+
+        <!-- Context Suggestions -->
+        <div class="suggestions-bar">
+          <span class="sug-title">Next Hints:</span>
+          <div class="sug-pills" id="suggestions-container">
+            <span class="sug-pill" data-word="HELP">1. HELP</span>
+            <span class="sug-pill" data-word="WATER">2. WATER</span>
+            <span class="sug-pill" data-word="PLEASE">3. PLEASE</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Right Column: Two-Way Dialogue, AI Tone, & Vocabulary -->
+    <div class="sidebar-container">
+      
+      <!-- Two-Way Live Dialogue -->
+      <div class="side-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            Live Conversation
+          </h2>
+          <button class="btn" id="btn-export-dialogue" style="padding: 4px 10px; font-size: 0.75rem;">Export</button>
+        </div>
+
+        <!-- Dialogue Timeline -->
+        <div class="dialogue-timeline" id="dialogue-timeline">
+          <div class="timeline-turn turn-signer">
+            <div class="turn-author"><span>Signer</span><span>Just now</span></div>
+            <div>Welcome! Start signing or speak into the microphone to begin.</div>
+          </div>
+        </div>
+
+        <!-- Hearing Partner Microphone Listener -->
+        <div class="partner-mic-box">
+          <div class="mic-btn-container">
+            <input type="text" class="mic-input" id="partner-speech-input" placeholder="Partner speaking...">
+            <button class="btn btn-accent" id="btn-partner-mic" title="Listen with Microphone">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+            <button class="btn" id="btn-partner-send">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gemini AI & Tone Preferences -->
+      <div class="side-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            AI Sentence Expansion
+          </h2>
+          <span class="brand-badge" id="ai-status-badge">Smart Rules</span>
+        </div>
+
+        <div class="tone-selector">
+          <button class="tone-btn active" data-tone="polite">Polite</button>
+          <button class="tone-btn" data-tone="casual">Casual</button>
+          <button class="tone-btn" data-tone="emergency">Urgent</button>
+        </div>
+
+        <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Gemini API Key (Optional):</label>
+        <input type="password" class="input-field" id="gemini-api-key" placeholder="AIzaSy... (Leave empty for Smart Rules)">
+      </div>
+
+      <!-- Vocabulary Studio -->
+      <div class="side-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            Active Vocabulary
+          </h2>
+          <span class="mono" style="font-size: 0.75rem; color: var(--text-muted);" id="vocab-count">16 Words</span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" class="input-field" id="new-word-input" placeholder="New sign word..." style="margin-bottom: 0;">
+          <button class="btn btn-primary" id="btn-add-word">Add</button>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto;" id="vocab-pills-container">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

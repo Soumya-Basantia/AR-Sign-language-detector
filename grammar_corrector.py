@@ -115,11 +115,11 @@ class GrammarCorrector:
         tokens = [w.upper().strip() for w in words if w.strip()]
 
         tokens = self._strip_noise(tokens)
-        tokens = self._reorder_words(tokens)
         tokens = self._dedup_consecutive(tokens)
+        tokens = self._reorder_words(tokens)
         tokens = self._fix_agreement(tokens)
-        tokens = self._capitalise(tokens)
-        sentence = " ".join(tokens)
+        formatted_tokens = self._capitalise(tokens)
+        sentence = " ".join(formatted_tokens)
 
         if self._contract:
             sentence = self._apply_contractions(sentence)
@@ -180,48 +180,43 @@ class GrammarCorrector:
         return out
 
     def _capitalise(self, tokens: List[str]) -> List[str]:
-        """Title-case first word; keep 'I' always uppercase."""
+        """Sentence-case: first word capitalized, 'I' always caps, rest lowercase."""
         out = []
         for idx, t in enumerate(tokens):
             if idx == 0:
-                out.append(t.capitalize())
+                out.append(t if t in ALWAYS_CAPS else t.capitalize())
             elif t in ALWAYS_CAPS:
                 out.append(t)          # keep "I" uppercase
             else:
-                out.append(t.capitalize())
+                out.append(t.lower())
         return out
 
     def _apply_contractions(self, sentence: str) -> str:
         upper = sentence.upper()
         for phrase, contraction in NORMALISE.items():
             if phrase in upper:
-                # Case-insensitive replace preserving the contracted form
                 pattern = re.compile(re.escape(phrase), re.IGNORECASE)
                 sentence = pattern.sub(contraction, sentence)
         return sentence
 
-    def _add_terminal_punct(self, original_tokens: List[str],
-                             sentence: str) -> str:
+    def _add_terminal_punct(self, tokens: List[str], sentence: str) -> str:
         if not sentence or sentence[-1] in ".!?,":
             return sentence
         if not self._add_punct:
             return sentence + "."
 
-        last = original_tokens[-1].upper() if original_tokens else ""
+        upper_tokens = [t.upper() for t in tokens]
+        last = upper_tokens[-1] if upper_tokens else ""
+        first = upper_tokens[0] if upper_tokens else ""
 
         # Questions
         question_starters = {"WHAT", "WHERE", "WHEN", "WHO", "WHY", "HOW",
-                              "CAN", "DO", "DOES", "IS", "ARE", "WILL"}
-        first = original_tokens[0].upper() if original_tokens else ""
+                             "CAN", "DO", "DOES", "IS", "ARE", "WILL"}
         if first in question_starters:
             return sentence + "?"
 
-        # Exclamatory endings
-        if last in {"HELP", "STOP", "NOW", "PLEASE"}:
+        # Exclamatory endings / emergency requests
+        if "HELP" in upper_tokens or "STOP" in upper_tokens or last in {"HELP", "STOP", "NOW", "PLEASE"}:
             return sentence + "!"
-
-        # Polite endings
-        if last in SENTENCE_ENDERS - {"HELP", "STOP", "NOW", "PLEASE"}:
-            return sentence + "."
 
         return sentence + "."

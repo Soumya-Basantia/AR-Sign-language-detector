@@ -90,7 +90,7 @@ def list_words():
     print(f"\n📅 Last updated: {vocab['last_updated']}")
 
 def collect_word_data(word):
-    """Collect data for a specific word."""
+    """Collect data for a specific word directly using webcam."""
     vocab = load_vocabulary()
 
     if word not in vocab["words"]:
@@ -100,134 +100,20 @@ def collect_word_data(word):
     print(f"🎥 Starting data collection for: {word}")
     print("Make sure your webcam is ready...")
 
-    # Import here to avoid loading OpenCV unnecessarily
-    import subprocess
-    import sys
-
-    # Create a temporary script for single word collection
-    temp_script = f"""
-import cv2
-import mediapipe as mp
-import numpy as np
-import os
-import time
-
-# Configuration
-SEQUENCE_LENGTH = 40
-SEQUENCES_PER_WORD = 30
-COLLECTION_DELAY = 2
-DATA_DIR = "{DATA_DIR}"
-
-def collect_for_word(word):
+    from collect_sequences import collect_for_word
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("Cannot open webcam!")
+        print("❌ Cannot open webcam! Check camera connection.")
         return
 
-    # Count existing sequences
-    word_dir = os.path.join(DATA_DIR, word)
-    existing = [f for f in os.listdir(word_dir) if f.endswith(".npy")]
-    seq_idx = len(existing)
-
-    print(f"Already have {{seq_idx}} sequences for '{{word}}'")
-
-    while seq_idx < SEQUENCES_PER_WORD:
-        sequence_frames = []
-
-        # Countdown
-        wait_start = time.time()
-        while time.time() - wait_start < COLLECTION_DELAY:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame = cv2.flip(frame, 1)
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Draw hand landmarks
-            hand_result = hands_detector.process(rgb)
-            if hand_result.multi_hand_landmarks:
-                for hand_lm in hand_result.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(
-                        frame, hand_lm, mp_hands.HAND_CONNECTIONS,
-                        mp_draw.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
-                        mp_draw.DrawingSpec(color=(255, 0, 0), thickness=2)
-                    )
-
-            remaining = COLLECTION_DELAY - (time.time() - wait_start)
-            cv2.putText(frame, f"WORD: {{word}}  |  Seq {{seq_idx+1}}/{{SEQUENCES_PER_WORD}}",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            cv2.putText(frame, f"GET READY... {{remaining:.1f}}s",
-                        (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
-            cv2.imshow("Collect Data", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                cap.release()
-                cv2.destroyAllWindows()
-                return
-
-        # Record frames
-        frame_idx = 0
-        while frame_idx < SEQUENCE_LENGTH:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame = cv2.flip(frame, 1)
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            feats = extract_features(rgb, include_face=True)
-            sequence_frames.append(feats)
-
-            # Draw hand landmarks
-            hand_result = hands_detector.process(rgb)
-            if hand_result.multi_hand_landmarks:
-                for hand_lm in hand_result.multi_hand_landmarks:
-                    mp_draw.draw_landmarks(
-                        frame, hand_lm, mp_hands.HAND_CONNECTIONS,
-                        mp_draw.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
-                        mp_draw.DrawingSpec(color=(255, 0, 0), thickness=2)
-                    )
-
-            # Progress bar
-            progress = int((frame_idx / SEQUENCE_LENGTH) * frame.shape[1])
-            cv2.rectangle(frame, (0, frame.shape[0]-10),
-                          (progress, frame.shape[0]), (0, 255, 0), -1)
-            cv2.putText(frame, f"RECORDING: {{word}}  [{{frame_idx+1}}/{{SEQUENCE_LENGTH}}]",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            cv2.imshow("Collect Data", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-            frame_idx += 1
-
-        # Save sequence
-        if len(sequence_frames) == SEQUENCE_LENGTH:
-            seq_array = np.array(sequence_frames)
-            save_path = os.path.join(DATA_DIR, word, f"{{seq_idx}}.npy")
-            np.save(save_path, seq_array)
-            print(f"Saved sequence {{seq_idx}} → {{save_path}}")
-            seq_idx += 1
-        else:
-            print("Incomplete sequence skipped.")
-
-        if cv2.waitKey(1000) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    print(f"✅ Data collection complete for '{{word}}'")
-
-collect_for_word("{word}")
-"""
-
-    # Write and run temporary script
-    with open("temp_collect.py", "w") as f:
-        f.write(temp_script)
-
     try:
-        subprocess.run([sys.executable, "temp_collect.py"], check=True)
-    except subprocess.CalledProcessError:
-        print("❌ Data collection failed!")
+        collect_for_word(word, cap)
+        print(f"✅ Data collection complete for '{word}'")
+    except Exception as e:
+        print(f"❌ Error during collection: {e}")
     finally:
-        # Clean up temp file
-        if os.path.exists("temp_collect.py"):
-            os.remove("temp_collect.py")
+        cap.release()
+        cv2.destroyAllWindows()
 
 def retrain_model():
     """Retrain the model with current vocabulary."""

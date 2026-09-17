@@ -67,16 +67,29 @@ def _draw_glow_text(img: np.ndarray, text: str, org: Tuple[int, int],
 def _rounded_rect(img: np.ndarray, x: int, y: int, w: int, h: int,
                   color: Tuple[int, int, int], radius: int = 10,
                   alpha: float = 0.7):
-    """Draw a filled rounded rectangle with transparency."""
-    overlay = img.copy()
-    # Main fill
-    cv2.rectangle(overlay, (x + radius, y), (x + w - radius, y + h), color, -1)
-    cv2.rectangle(overlay, (x, y + radius), (x + w, y + h - radius), color, -1)
+    """Draw a filled rounded rectangle with transparency, blending only the target ROI."""
+    ih, iw = img.shape[:2]
+    x1, y1 = max(0, x), max(0, y)
+    x2, y2 = min(iw, x + w), min(ih, y + h)
+    if x2 <= x1 or y2 <= y1:
+        return
+
+    sub = img[y1:y2, x1:x2]
+    overlay = sub.copy()
+
+    rx = x - x1
+    ry = y - y1
+    rad = min(radius, max(1, w // 2), max(1, h // 2))
+
+    # Fill components
+    cv2.rectangle(overlay, (rx + rad, ry), (rx + w - rad, ry + h), color, -1)
+    cv2.rectangle(overlay, (rx, ry + rad), (rx + w, ry + h - rad), color, -1)
     # Corners
-    for cx, cy in [(x + radius, y + radius), (x + w - radius, y + radius),
-                   (x + radius, y + h - radius), (x + w - radius, y + h - radius)]:
-        cv2.circle(overlay, (cx, cy), radius, color, -1)
-    cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+    for cx, cy in [(rx + rad, ry + rad), (rx + w - rad, ry + rad),
+                   (rx + rad, ry + h - rad), (rx + w - rad, ry + h - rad)]:
+        cv2.circle(overlay, (cx, cy), rad, color, -1)
+
+    cv2.addWeighted(overlay, alpha, sub, 1.0 - alpha, 0, sub)
 
 
 def _text_size(text: str, scale: float, thickness: int = 2):
@@ -163,6 +176,7 @@ class ARDisplay:
 
         # Scanline / pulse animation
         self._t0 = time.time()
+        self._vignette_cache = {}
 
     # ------------------------------------------------------------------
     # Public
@@ -551,22 +565,26 @@ class ARDisplay:
 
     def _draw_vignette(self, img: np.ndarray):
         h, w = img.shape[:2]
-        # Build gradient mask
-        Y, X = np.ogrid[:h, :w]
-        cx, cy = w / 2, h / 2
-        dist = np.sqrt(((X - cx) / cx) ** 2 + ((Y - cy) / cy) ** 2)
-        mask = np.clip(dist - 0.6, 0, 0.4) / 0.4  # fades edges
-        mask = (mask * 120).astype(np.uint8)
-        vignette = np.zeros_like(img)
-        for c in range(3):
-            vignette[:, :, c] = mask
-        img -= np.minimum(img, vignette)
+        key = (h, w)
+        if key not in self._vignette_cache:
+            Y, X = np.ogrid[:h, :w]
+            cx, cy = w / 2.0, h / 2.0
+            dist = np.sqrt(((X - cx) / cx) ** 2 + ((Y - cy) / cy) ** 2)
+            mask = np.clip(dist - 0.6, 0, 0.4) / 0.4  # fades edges
+            mask = (mask * 120).astype(np.uint8)
+            vignette = np.zeros((h, w, 3), dtype=np.uint8)
+            for c in range(3):
+                vignette[:, :, c] = mask
+            self._vignette_cache[key] = vignette
+
+        vignette = self._vignette_cache[key]
+        cv2.subtract(img, vignette, dst=img)
 
     def _draw_scanlines(self, img: np.ndarray, t: float):
-        h, w = img.shape[:2]
+        h = img.shape[0]
         offset = int(t * 60) % 4
-        for y in range(offset, h, 4):
-            img[y, :] = (img[y, :] * 0.88).astype(np.uint8)
+        # Vectorized integer scanline darkening
+        img[offset:h:4] = (img[offset:h:4].astype(np.uint16) * 225 // 256).astype(np.uint8)
 
     def _draw_corner_brackets(self, img: np.ndarray, w: int, h: int):
         length = 28
